@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#f2a33a">
+<link rel="manifest" href="manifest.json">
+<title>すいすい家系図＋</title>
+<style>
+:root{--accent:#f2a33a;--bg:#f5f3ee;--line:#777;--male:#14839a;--female:#ed6b2f;--unknown:#777}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:var(--bg);color:#555}
+#app{width:100%;height:100%;position:relative}
+#tree{position:absolute;inset:0;touch-action:none;overflow:hidden;cursor:grab}
+#tree.dragging{cursor:grabbing}
+#world{position:absolute;left:0;top:0;transform-origin:0 0}
+svg{overflow:visible}
+.toolbar{position:absolute;z-index:5;display:flex;flex-direction:column;gap:10px}
+.toolbar button,.side button{border:2px solid var(--accent);background:#fffaf2;color:var(--accent);border-radius:7px;box-shadow:0 1px 3px #0001;font-weight:700}
+.toolbar button{width:58px;height:58px;font-size:25px}
+#topbar{top:14px;right:14px}
+#bottombar{right:14px;bottom:14px}
+#leftbar{left:14px;top:14px}
+#leftbar button{width:100px;height:48px;font-size:14px}
+#leftbar button.active{background:var(--accent);color:white}
+#searchPanel{position:absolute;z-index:10;top:14px;right:84px;width:min(310px,calc(100vw - 110px));background:#fff;border:1px solid #ddd;border-radius:10px;padding:10px;display:none;box-shadow:0 5px 20px #0002}
+#searchPanel.open{display:block}
+#searchInput{width:100%;height:40px;border:1px solid #ccc;border-radius:7px;padding:0 10px;font-size:16px}
+#results{max-height:220px;overflow:auto;margin-top:7px}
+.result{padding:9px;border-bottom:1px solid #eee}
+.result:last-child{border-bottom:0}
+#personPanel{position:absolute;z-index:12;right:14px;top:90px;width:min(330px,calc(100vw - 28px));max-height:70vh;overflow:auto;background:#fff;border-radius:12px;padding:16px;box-shadow:0 8px 30px #0003;display:none}
+#personPanel.open{display:block}
+#personPanel h2{margin:0 0 8px;font-size:20px}
+.meta{font-size:13px;color:#777;line-height:1.6}
+.panelBtns{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}
+.panelBtns button,.form button{height:40px;border:1px solid var(--accent);border-radius:7px;background:#fffaf2;color:#c97812;font-weight:700}
+.close{float:right;border:0!important;background:transparent!important;font-size:20px}
+#modal{position:absolute;z-index:20;inset:0;background:#0005;display:none;align-items:flex-end;justify-content:center}
+#modal.open{display:flex}
+.sheet{width:min(520px,100%);max-height:90%;overflow:auto;background:white;border-radius:18px 18px 0 0;padding:18px}
+.sheet h2{margin:0 0 12px}
+.form label{display:block;font-size:13px;margin:10px 0 4px;color:#666}
+.form input,.form select,.form textarea{width:100%;padding:9px;border:1px solid #ccc;border-radius:7px;font-size:16px}
+.form textarea{min-height:80px;resize:vertical}
+.form .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.formActions{display:flex;gap:8px;margin-top:15px}
+.formActions button{flex:1}
+.hint{position:absolute;z-index:4;left:50%;bottom:12px;transform:translateX(-50%);font-size:11px;color:#888;background:#ffffffbb;padding:4px 8px;border-radius:10px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="tree">
+    <div id="world">
+      <svg id="svg" width="1600" height="1100"></svg>
+    </div>
+  </div>
+
+  <div id="leftbar" class="toolbar">
+    <button id="allBtn" class="active">∞<br>すべて</button>
+    <button data-depth="3">▼<br>祖父母</button>
+    <button data-depth="2">▼<br>曽祖父母</button>
+    <button data-depth="1">▼<br>高祖父母</button>
+  </div>
+
+  <div id="topbar" class="toolbar">
+    <button id="searchBtn" aria-label="検索">⌕</button>
+    <button id="addBtn" aria-label="人物追加">＋</button>
+  </div>
+
+  <div id="bottombar" class="toolbar">
+    <button id="zoomIn">＋</button>
+    <button id="zoomOut">−</button>
+    <button id="centerBtn">◎</button>
+  </div>
+
+  <div id="searchPanel">
+    <input id="searchInput" placeholder="人物名を検索">
+    <div id="results"></div>
+  </div>
+
+  <div id="personPanel">
+    <button class="close" id="closePerson">×</button>
+    <h2 id="personName"></h2>
+    <div id="personMeta" class="meta"></div>
+    <div class="panelBtns">
+      <button id="centerPerson">この人を中心</button>
+      <button id="editPerson">編集</button>
+      <button id="addParent">親を追加</button>
+      <button id="addChild">子を追加</button>
+      <button id="addSpouse">配偶者を追加</button>
+      <button id="expandAnc">先祖を展開</button>
+    </div>
+  </div>
+
+  <div id="modal">
+    <div class="sheet">
+      <div class="form">
+        <h2 id="modalTitle">人物を追加</h2>
+        <input type="hidden" id="editId">
+        <label>名前 *</label><input id="fName">
+        <div class="row">
+          <div><label>性別</label><select id="fSex"><option value="unknown">不明</option><option value="male">男性</option><option value="female">女性</option></select></div>
+          <div><label>生年</label><input id="fBirth" type="text" placeholder="例：1859 / 安政6"></div>
+        </div>
+        <label>没年</label><input id="fDeath" type="text" placeholder="例：1903 / 明治36">
+        <label>メモ</label><textarea id="fMemo"></textarea>
+        <div class="formActions">
+          <button id="cancelModal">キャンセル</button><button id="savePerson">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="hint">1本指：移動　2本指：拡大・縮小　人物タップ：詳細</div>
+</div>
+<script>
+const svg=document.getElementById('svg'), world=document.getElementById('world'), tree=document.getElementById('tree');
+const state={people:[],parents:[],spouses:[],rootId:'',depth:99,selected:null,expanded:new Set()};
+const colors={male:'#14839a',female:'#ed6b2f',unknown:'#777'};
+
+function uid(){return crypto.randomUUID ? crypto.randomUUID() : Date.now()+Math.random()}
+function seed(){
+  state.people=[
+    {id:'a',name:'祖父',sex:'male',birth:'1920',death:'1998',memo:''},
+    {id:'b',name:'祖母',sex:'female',birth:'1924',death:'2005',memo:''},
+    {id:'c',name:'父',sex:'male',birth:'1950',death:'',memo:''},
+    {id:'d',name:'母',sex:'female',birth:'1954',death:'',memo:''},
+    {id:'e',name:'自分',sex:'unknown',birth:'2002',death:'',memo:'ここに人物情報を自由に記録できます。'},
+    {id:'f',name:'父の兄',sex:'male',birth:'1948',death:'',memo:''},
+    {id:'g',name:'父の兄の妻',sex:'female',birth:'1950',death:'',memo:''},
+    {id:'h',name:'いとこ',sex:'female',birth:'1980',death:'',memo:''}
+  ];
+  state.parents=[
+    {parent:'a',child:'c',role:'father',type:'bio'},
+    {parent:'b',child:'c',role:'mother',type:'bio'},
+    {parent:'c',child:'e',role:'father',type:'bio'},
+    {parent:'d',child:'e',role:'mother',type:'bio'},
+    {parent:'f',child:'h',role:'father',type:'bio'},
+    {parent:'g',child:'h',role:'mother',type:'bio'}
+  ];
+  state.spouses=[
+    {a:'a',b:'b',ended:false},{a:'c',b:'d',ended:false},{a:'f',b:'g',ended:false}
+  ];
+  state.rootId='e';
+  localStorage.setItem('kakeizuData',JSON.stringify(state));
+}
+function load(){
+  try{
+    const x=JSON.parse(localStorage.getItem('kakeizuData'));
+    if(x?.people){Object.assign(state,x);state.expanded=new Set(x.expanded||[]);return}
+  }catch(e){}
+  seed();
+}
+function save(){localStorage.setItem('kakeizuData',JSON.stringify({...state,expanded:[...state.expanded]}))}
+function person(id){return state.people.find(p=>p.id===id)}
+function ancestors(id,limit=99){
+  const out=new Set([id]), frontier=[id];
+  for(let g=0;g<limit;g++){
+    const next=[];
+    state.parents.filter(r=>frontier.includes(r.child)).forEach(r=>{if(!out.has(r.parent)){out.add(r.parent);next.push(r.parent)}})
+    if(!next.length)break; frontier.splice(0,frontier.length,...next)
+  } return out;
+}
+function descendants(id,limit=99){
+  const out=new Set([id]), frontier=[id];
+  for(let g=0;g<limit;g++){
+    const next=[];
+    state.parents.filter(r=>frontier.includes(r.parent)).forEach(r=>{if(!out.has(r.child)){out.add(r.child);next.push(r.child)}})
+    if(!next.length)break; frontier.splice(0,frontier.length,...next)
+  } return out;
+}
+function visible(){
+  if(state.depth===99)return new Set(state.people.map(p=>p.id));
+  const a=ancestors(state.rootId,state.depth), d=descendants(state.rootId,state.depth);
+  return new Set([...a,...d]);
+}
+function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function render(){
+  const vis=visible(), nodes=[...vis].map(id=>person(id)).filter(Boolean);
+  const byGen={};
+  const root=state.rootId;
+  const gen={ [root]:0 }, q=[root];
+  while(q.length){const id=q.shift(); const g=gen[id];
+    state.parents.filter(r=>r.child===id).forEach(r=>{if(gen[r.parent]===undefined){gen[r.parent]=g-1;q.push(r.parent)}})
+    state.parents.filter(r=>r.parent===id).forEach(r=>{if(gen[r.child]===undefined){gen[r.child]=g+1;q.push(r.child)}})
+  }
+  nodes.forEach(p=>(byGen[gen[p.id]??0]??=[]).push(p));
+  const positions={}; const gens=Object.keys(byGen).map(Number).sort((a,b)=>a-b);
+  gens.forEach(g=>byGen[g].forEach((p,i)=>positions[p.id]={x:760+(i-(byGen[g].length-1)/2)*190,y:520+g*190}));
+  svg.innerHTML='';
+  const lineGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
+  const nodeGroup=document.createElementNS('http://www.w3.org/2000/svg','g');
+  state.spouses.forEach(r=>{
+    if(!vis.has(r.a)||!vis.has(r.b)||!positions[r.a]||!positions[r.b])return;
+    const A=positions[r.a],B=positions[r.b], l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',A.x+42);l.setAttribute('y1',A.y);l.setAttribute('x2',B.x-42);l.setAttribute('y2',B.y);l.setAttribute('stroke','#777');l.setAttribute('stroke-width','5');
+    lineGroup.appendChild(l);
+    if(r.ended){const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.textContent='×';t.setAttribute('x',(A.x+B.x)/2);t.setAttribute('y',A.y+7);t.setAttribute('text-anchor','middle');t.setAttribute('font-size','26');t.setAttribute('fill','#777');lineGroup.appendChild(t)}
+  });
+  state.parents.forEach(r=>{
+    if(!vis.has(r.parent)||!vis.has(r.child)||!positions[r.parent]||!positions[r.child])return;
+    const A=positions[r.parent],B=positions[r.child];
+    const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',A.x);l.setAttribute('y1',A.y+45);l.setAttribute('x2',B.x);l.setAttribute('y2',B.y-45);
+    l.setAttribute('stroke','#777');l.setAttribute('stroke-width','5');if(r.type==='adopted')l.setAttribute('stroke-dasharray','10 8');
+    lineGroup.appendChild(l);
+  });
+  svg.appendChild(lineGroup);
+  nodes.forEach(p=>{
+    const pos=positions[p.id], g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('transform',`translate(${pos.x},${pos.y})`);g.dataset.id=p.id;g.style.cursor='pointer';
+    const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');circle.setAttribute('r','40');circle.setAttribute('fill',colors[p.sex]||colors.unknown);circle.setAttribute('stroke','#fff');circle.setAttribute('stroke-width','4');
+    const symbol=document.createElementNS('http://www.w3.org/2000/svg','text');symbol.textContent=p.sex==='male'?'♂':p.sex==='female'?'♀':'?';symbol.setAttribute('text-anchor','middle');symbol.setAttribute('dy','9');symbol.setAttribute('font-size','34');symbol.setAttribute('fill','white');
+    const box=document.createElementNS('http://www.w3.org/2000/svg','rect');box.setAttribute('x','-48');box.setAttribute('y','48');box.setAttribute('width','96');box.setAttribute('height','70');box.setAttribute('rx','6');box.setAttribute('fill','#fff');box.setAttribute('stroke','#aaa');
+    const name=document.createElementNS('http://www.w3.org/2000/svg','text');name.textContent=p.name;name.setAttribute('x','0');name.setAttribute('y','67');name.setAttribute('text-anchor','middle');name.setAttribute('font-size','16');name.setAttribute('fill','#444');
+    const dates=document.createElementNS('http://www.w3.org/2000/svg','text');dates.textContent=[p.birth,p.death].filter(Boolean).join('–');dates.setAttribute('x','0');dates.setAttribute('y','90');dates.setAttribute('text-anchor','middle');dates.setAttribute('font-size','12');dates.setAttribute('fill','#777');
+    if(p.id===state.rootId){const ring=document.createElementNS('http://www.w3.org/2000/svg','circle');ring.setAttribute('r','49');ring.setAttribute('fill','none');ring.setAttribute('stroke','#f2a33a');ring.setAttribute('stroke-width','8');ring.setAttribute('opacity','.35');g.appendChild(ring)}
+    g.append(circle,symbol,box,name,dates);g.addEventListener('click',e=>{e.stopPropagation();selectPerson(p.id)});nodeGroup.appendChild(g);
+  });
+  svg.appendChild(nodeGroup);
+}
+function selectPerson(id){state.selected=id;const p=person(id);document.getElementById('personName').textContent=p.name;document.getElementById('personMeta').innerHTML=`性別：${p.sex==='male'?'男性':p.sex==='female'?'女性':'不明'}<br>生年：${esc(p.birth)||'—'}　没年：${esc(p.death)||'—'}<br><br>${esc(p.memo)||'メモなし'}`;document.getElementById('personPanel').classList.add('open')}
+function centerOn(id){state.rootId=id;render();centerView();save();document.getElementById('personPanel').classList.remove('open')}
+function centerView(){scale=0.72;tx=innerWidth/2-760*scale;ty=innerHeight/2-520*scale;applyTransform()}
+let scale=.72,tx=innerWidth/2-760*scale,ty=innerHeight/2-520*scale;
+function applyTransform(){world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`}
+function openModal(id=null){
+  document.getElementById('modalTitle').textContent=id?'人物を編集':'人物を追加';document.getElementById('editId').value=id||'';
+  const p=id?person(id):{name:'',sex:'unknown',birth:'',death:'',memo:''};
+  fName.value=p.name;fSex.value=p.sex;fBirth.value=p.birth;fDeath.value=p.death;fMemo.value=p.memo;modal.classList.add('open');
+}
+function saveForm(){
+  const id=document.getElementById('editId').value;
+  if(!fName.value.trim())return alert('名前を入力してください。');
+  if(id){Object.assign(person(id),{name:fName.value.trim(),sex:fSex.value,birth:fBirth.value.trim(),death:fDeath.value.trim(),memo:fMemo.value})}
+  else{const p={id:uid(),name:fName.value.trim(),sex:fSex.value,birth:fBirth.value.trim(),death:fDeath.value.trim(),memo:fMemo.value};state.people.push(p);state.rootId=p.id}
+  save();render();modal.classList.remove('open');
+}
+document.getElementById('searchBtn').onclick=()=>searchPanel.classList.toggle('open');
+searchInput.oninput=()=>{const q=searchInput.value.trim();results.innerHTML=state.people.filter(p=>p.name.includes(q)).slice(0,20).map(p=>`<div class="result" data-id="${p.id}">${esc(p.name)} <span class="meta">${esc(p.birth)}</span></div>`).join('');results.querySelectorAll('.result').forEach(x=>x.onclick=()=>{centerOn(x.dataset.id);searchPanel.classList.remove('open')})};
+document.getElementById('addBtn').onclick=()=>openModal();
+document.getElementById('savePerson').onclick=saveForm;
+document.getElementById('cancelModal').onclick=()=>modal.classList.remove('open');
+document.getElementById('closePerson').onclick=()=>personPanel.classList.remove('open');
+document.getElementById('editPerson').onclick=()=>openModal(state.selected);
+document.getElementById('centerPerson').onclick=()=>centerOn(state.selected);
+document.getElementById('expandAnc').onclick=()=>{state.depth=99;render();save();};
+document.getElementById('addParent').onclick=()=>alert('次の段階で、親の追加と親子関係の登録を実装します。');
+document.getElementById('addChild').onclick=()=>alert('次の段階で、子の追加と親子関係の登録を実装します。');
+document.getElementById('addSpouse').onclick=()=>alert('次の段階で、配偶者と婚姻状態の登録を実装します。');
+document.querySelectorAll('#leftbar [data-depth]').forEach(b=>b.onclick=()=>{state.depth=Number(b.dataset.depth);document.querySelectorAll('#leftbar button').forEach(x=>x.classList.remove('active'));b.classList.add('active');render();save()});
+document.getElementById('allBtn').onclick=()=>{state.depth=99;document.querySelectorAll('#leftbar button').forEach(x=>x.classList.remove('active'));allBtn.classList.add('active');render();save()};
+zoomIn.onclick=()=>{scale=Math.min(2,scale*1.2);applyTransform()};zoomOut.onclick=()=>{scale=Math.max(.3,scale/1.2);applyTransform()};centerBtn.onclick=centerView;
+
+let pointers=new Map(),lastDist=null,lastMid=null,last={x:0,y:0};
+tree.addEventListener('pointerdown',e=>{tree.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){last={x:e.clientX,y:e.clientY};tree.classList.add('dragging')}});
+tree.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){tx+=e.clientX-last.x;ty+=e.clientY-last.y;last={x:e.clientX,y:e.clientY};applyTransform()}else if(pointers.size===2){const a=[...pointers.values()];const dx=a[0].x-a[1].x,dy=a[0].y-a[1].y,dist=Math.hypot(dx,dy),mid={x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2};if(lastDist){const factor=dist/lastDist;const beforeX=(mid.x-tx)/scale,beforeY=(mid.y-ty)/scale;scale=Math.max(.3,Math.min(2.5,scale*factor));tx=mid.x-beforeX*scale;ty=mid.y-beforeY*scale;tx+=mid.x-lastMid.x;ty+=mid.y-lastMid.y;applyTransform()}lastDist=dist;lastMid=mid}});
+function pointerUp(e){pointers.delete(e.pointerId);if(pointers.size<2){lastDist=null;lastMid=null}if(pointers.size===0)tree.classList.remove('dragging')}
+tree.addEventListener('pointerup',pointerUp);tree.addEventListener('pointercancel',pointerUp);
+tree.addEventListener('click',e=>{if(e.target===tree)personPanel.classList.remove('open')});
+
+load();render();applyTransform();
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

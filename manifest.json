@@ -1,0 +1,9 @@
+{
+  "name": "すいすい家系図＋",
+  "short_name": "家系図＋",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f3ee",
+  "theme_color": "#f2a33a",
+  "lang": "ja"
+}
