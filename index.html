@@ -194,7 +194,7 @@ function render(){
   state.spouses.forEach(r=>{
     if(!vis.has(r.a)||!vis.has(r.b)||!positions[r.a]||!positions[r.b])return;
     const A=positions[r.a],B=positions[r.b], l=document.createElementNS('http://www.w3.org/2000/svg','line');
-    l.setAttribute('x1',A.x+42);l.setAttribute('y1',A.y);l.setAttribute('x2',B.x-42);l.setAttribute('y2',B.y);l.setAttribute('stroke','#777');l.setAttribute('stroke-width','5');
+    l.setAttribute('x1',A.x+40);l.setAttribute('y1',A.y);l.setAttribute('x2',B.x-40);l.setAttribute('y2',B.y);l.setAttribute('stroke','#777');l.setAttribute('stroke-width','5');
     lineGroup.appendChild(l);
     if(r.ended){const t=document.createElementNS('http://www.w3.org/2000/svg','text');t.textContent='×';t.setAttribute('x',(A.x+B.x)/2);t.setAttribute('y',A.y+7);t.setAttribute('text-anchor','middle');t.setAttribute('font-size','26');t.setAttribute('fill','#777');lineGroup.appendChild(t)}
   });
@@ -221,8 +221,8 @@ function render(){
     });
     const A=positions[sp.a], B=positions[sp.b];
     const midX=(A.x+B.x)/2;
-    const topY=Math.min(A.y,B.y)+45;
-    const childY=positions[children[0]].y-75;
+    const topY=Math.min(A.y,B.y)+40;
+    const childY=positions[children[0]].y-40;
     const stem=document.createElementNS('http://www.w3.org/2000/svg','line');
     stem.setAttribute('x1',midX);stem.setAttribute('y1',topY);stem.setAttribute('x2',midX);stem.setAttribute('y2',childY);
     stem.setAttribute('stroke','#777');stem.setAttribute('stroke-width','5');lineGroup.appendChild(stem);
@@ -235,7 +235,7 @@ function render(){
     children.forEach(cid=>{
       const x=positions[cid].x;
       const v=document.createElementNS('http://www.w3.org/2000/svg','line');
-      v.setAttribute('x1',x);v.setAttribute('y1',childY);v.setAttribute('x2',x);v.setAttribute('y2',positions[cid].y-45);
+      v.setAttribute('x1',x);v.setAttribute('y1',childY);v.setAttribute('x2',x);v.setAttribute('y2',positions[cid].y-40);
       v.setAttribute('stroke','#777');v.setAttribute('stroke-width','5');lineGroup.appendChild(v);
     });
   });
@@ -246,7 +246,7 @@ function render(){
     if(r.type==='bio' && usedBio.has(`${r.parent}|${r.child}`))return;
     const A=positions[r.parent],B=positions[r.child];
     const l=document.createElementNS('http://www.w3.org/2000/svg','line');
-    l.setAttribute('x1',A.x);l.setAttribute('y1',A.y+45);l.setAttribute('x2',B.x);l.setAttribute('y2',B.y-45);
+    l.setAttribute('x1',A.x);l.setAttribute('y1',A.y+40);l.setAttribute('x2',B.x);l.setAttribute('y2',B.y-40);
     l.setAttribute('stroke','#777');l.setAttribute('stroke-width','5');
     if(r.type==='adopted')l.setAttribute('stroke-dasharray','10 8');
     lineGroup.appendChild(l);
